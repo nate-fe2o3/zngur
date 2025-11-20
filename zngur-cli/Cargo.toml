@@ -17,3 +17,5 @@ bench = false
 [dependencies]
 zngur = { version = "=0.7.0", path = "../zngur" }
 clap = { version = "4.3.12", features = ["derive"] }
+zngur-rdep-parser = {version = "*", path = "../zngur-rdep-parser/"}
+walkdir = "2.5.0"

@@ -1,7 +1,9 @@
-use std::path::PathBuf;
+use std::{fs::FileType, path::PathBuf};
 
 use clap::Parser;
+use walkdir::WalkDir;
 use zngur::Zngur;
+use zngur_rdep_parser::RdepParser;
 
 #[derive(Parser)]
 #[command(version)]
@@ -58,21 +60,44 @@ fn main() {
             mangling_base,
             cpp_namespace,
         } => {
-            let pp = path.parent().unwrap();
-            let cpp_file = cpp_file.unwrap_or_else(|| pp.join("generated.cpp"));
-            let h_file = h_file.unwrap_or_else(|| pp.join("generated.h"));
-            let rs_file = rs_file.unwrap_or_else(|| pp.join("src/generated.rs"));
-            let mut zng = Zngur::from_zng_file(&path)
-                .with_cpp_file(cpp_file)
-                .with_h_file(h_file)
-                .with_rs_file(rs_file);
-            if let Some(mangling_base) = mangling_base {
-                zng = zng.with_mangling_base(&mangling_base);
+            match path {
+                f if f.is_file() => {
+                    let pp = f.parent().unwrap();
+                    let cpp_file = cpp_file.unwrap_or_else(|| pp.join("generated.cpp"));
+                    let h_file = h_file.unwrap_or_else(|| pp.join("generated.h"));
+                    let rs_file = rs_file.unwrap_or_else(|| pp.join("src/generated.rs"));
+                    let pre_gen_rs = pp.join("src/pre_generated.rs");
+                    let parsed_types = RdepParser::run(f);
+
+                    // let mut zng = Zngur::from_zng_file(&path, &pre_gen_rs)
+                    //     .with_cpp_file(cpp_file)
+                    //     .with_h_file(h_file)
+                    //     .with_rs_file(rs_file);
+                    // if let Some(mangling_base) = mangling_base {
+                    //     zng = zng.with_mangling_base(&mangling_base);
+                    // }
+                    // if let Some(cpp_namespace) = cpp_namespace {
+                    //     zng = zng.with_cpp_namespace(&cpp_namespace);
+                    // }
+                    // zng.generate();
+                }
+                d if d.is_dir() => {
+                    let all_rdeps = recursive_rdeps(d);
+                }
+                _ => {
+                    panic!()
+                }
             }
-            if let Some(cpp_namespace) = cpp_namespace {
-                zng = zng.with_cpp_namespace(&cpp_namespace);
-            }
-            zng.generate();
         }
     }
+}
+
+fn recursive_rdeps(path: PathBuf) {
+    let all_parsed_types = WalkDir::new(path)
+        .into_iter()
+        .filter_map(|x| x.ok())
+        .filter(|x| x.path().extension().is_some())
+        .filter(|x| x.path().extension().unwrap().to_str().unwrap() == "rdep")
+        .map(|x| RdepParser::run(x.path().to_path_buf()))
+        .collect::<Vec<_>>();
 }

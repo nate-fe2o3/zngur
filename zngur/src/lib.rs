@@ -8,6 +8,7 @@ use std::{
 };
 
 use zngur_generator::{ParsedZngFile, ZngurGenerator};
+use zngur_rdep_parser::RdepParser;
 
 #[must_use]
 /// Builder for the Zngur generator.
@@ -24,6 +25,7 @@ use zngur_generator::{ParsedZngFile, ZngurGenerator};
 /// ```
 pub struct Zngur {
     zng_file: PathBuf,
+    rs_pre_gen: PathBuf,
     h_file_path: Option<PathBuf>,
     cpp_file_path: Option<PathBuf>,
     rs_file_path: Option<PathBuf>,
@@ -32,9 +34,13 @@ pub struct Zngur {
 }
 
 impl Zngur {
-    pub fn from_zng_file(zng_file_path: impl AsRef<Path>) -> Self {
+    pub fn from_zng_file(
+        zng_file_path: impl AsRef<Path>,
+        rs_target_path: impl AsRef<Path>,
+    ) -> Self {
         Zngur {
             zng_file: zng_file_path.as_ref().to_owned(),
+            rs_pre_gen: rs_target_path.as_ref().to_owned(),
             h_file_path: None,
             cpp_file_path: None,
             rs_file_path: None,
@@ -69,8 +75,8 @@ impl Zngur {
     }
 
     pub fn generate(self) {
+        let rtypes = RdepParser::run(self.zng_file.clone());
         let mut file = ZngurGenerator::build_from_zng(ParsedZngFile::parse(self.zng_file));
-
         let rs_file_path = self.rs_file_path.expect("No rs file path provided");
         let h_file_path = self.h_file_path.expect("No h file path provided");
 
