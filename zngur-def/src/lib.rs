@@ -1,4 +1,5 @@
-use std::{collections::HashMap, fmt::Display};
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, fmt::Display, io::BufWriter};
 
 use itertools::Itertools;
 
@@ -82,7 +83,7 @@ pub enum ZngurWellknownTraitData {
     Copy,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LayoutPolicy {
     StackAllocated { size: usize, align: usize },
     HeapAllocated,
@@ -151,6 +152,18 @@ pub struct ZngurSpec {
     pub cpp_include_header_name: String,
     pub mangling_base: String,
     pub cpp_namespace: String,
+}
+
+impl ZngurSpec {
+    pub fn generate_use_stmt(&self) -> String {
+        let fields = self
+            .types
+            .iter()
+            .enumerate()
+            .map(|(idx, zngur_type)| format!("   pub zty{idx}: {},", zngur_type.ty.to_source()))
+            .join("\n");
+        format!("pub struct Ignore{{ {fields} }}")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -284,5 +297,71 @@ impl Display for RustType {
             }
             RustType::Slice(s) => write!(f, "[{s}]"),
         }
+    }
+}
+
+trait ToSource {
+    fn to_source(&self) -> String;
+}
+
+impl ToSource for RustType {
+    fn to_source(&self) -> String {
+        match self {
+            RustType::Primitive(s) => match s {
+                PrimitiveRustType::Uint(s) => format!("u{s}"),
+                PrimitiveRustType::Int(s) => format!("i{s}"),
+                PrimitiveRustType::Float(s) => format!("f{s}"),
+                PrimitiveRustType::Usize => format!("usize"),
+                PrimitiveRustType::Bool => format!("bool"),
+                PrimitiveRustType::Str => format!("str"),
+                PrimitiveRustType::ZngurCppOpaqueOwnedObject => {
+                    format!("ZngurCppOpaqueOwnedObject")
+                }
+            },
+            RustType::Ref(Mutability::Not, ty) => format!("&'static {}", ty.to_source()),
+            RustType::Ref(Mutability::Mut, ty) => format!("&'static mut {}", ty.to_source()),
+            RustType::Raw(Mutability::Not, ty) => format!("*const {}", ty.to_source()),
+            RustType::Raw(Mutability::Mut, ty) => format!("*mut {}", ty.to_source()),
+            RustType::Boxed(ty) => format!("Box<{}>", ty.to_source()),
+            RustType::Tuple(v) => format!("({})", v.iter().map(|x| x.to_source()).join(", ")),
+            RustType::Adt(pg) => format!("{}", pg.to_source()),
+            RustType::Dyn(tr, marker_bounds) => {
+                let mut f = format!("dyn {tr}");
+                f.push_str(
+                    &marker_bounds
+                        .iter()
+                        .map(|x| format!("+ {x}"))
+                        .collect::<String>(),
+                );
+                f
+            }
+            RustType::Slice(s) => format!("[{s}]"),
+        }
+    }
+}
+
+impl ToSource for RustPathAndGenerics {
+    fn to_source(&self) -> String {
+        let RustPathAndGenerics {
+            path,
+            generics,
+            named_generics,
+        } = self;
+        let mut output = path.join("::");
+        if !generics.is_empty() || !named_generics.is_empty() {
+            output.push_str(&format!(
+                "<{}>",
+                generics
+                    .iter()
+                    .map(|x| format!("{}", x.to_source()))
+                    .chain(
+                        named_generics
+                            .iter()
+                            .map(|x| format!("{} = {}", x.0, x.1.to_source()))
+                    )
+                    .join(", ")
+            ));
+        }
+        output
     }
 }

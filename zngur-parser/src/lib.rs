@@ -535,14 +535,7 @@ impl ProcessedItem<'_> {
                     }
                     layout = Some(LayoutPolicy::OnlyByRef);
                 }
-                let Some(layout) = layout else {
-                    create_and_emit_error(
-                        ctx,
-                        "No layout policy found for this type. \
-Use one of `#layout(size = X, align = Y)`, `#heap_allocated` or `#only_by_ref`.",
-                        ty.span,
-                    );
-                };
+                let layout = layout.unwrap_or(LayoutPolicy::HeapAllocated);
                 checked_merge(
                     ZngurType {
                         ty: ty.inner.to_zngur(scope),
